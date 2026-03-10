@@ -1,0 +1,38 @@
+{
+    "Domain": "yourcompany",
+    "ApiToken": "YOUR_API_TOKEN",
+    "UserId": 0,
+    "UserEmail": "you@yourcompany.com",
+
+    "Desk": {
+        "BookableId": 0,
+        "LocationId": 0,
+        "FromTime": "09:00",
+        "ToTime": "17:00"
+    },
+
+    "Parking": {
+        "BookableId": 0,
+        "LocationId": 0,
+        "FromTime": "09:00",
+        "ToTime": "17:00"
+    },
+
+    "BookableNames": {
+        "0": "Example Desk"
+    },
+
+    "DeskFallbacks": [],
+    "ParkingFallbacks": [
+        { "BookableId": 0, "LocationId": 0 }
+    ],
+
+    "DeskDaysAhead": 14,
+    "ParkingDaysAhead": 7,
+
+    "Ntfy": {
+        "Enabled": false,
+        "Topic": "your-unique-topic-here",
+        "Server": "https://ntfy.sh"
+    }
+}
