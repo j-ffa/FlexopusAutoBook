@@ -17,7 +17,7 @@
 
 .EXAMPLE
     # Book for a specific date instead of the next weekday
-    .\FlexopusAutoBook.ps1 -Date "2026-02-16"
+    .\FlexopusAutoBook.ps1 -Date "yyyy-MM-dd"
 #>
 
 [CmdletBinding()]

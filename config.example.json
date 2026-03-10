@@ -27,8 +27,8 @@
         { "BookableId": 0, "LocationId": 0 }
     ],
 
-    "DeskDaysAhead": 14,
-    "ParkingDaysAhead": 7,
+    "DeskDaysAhead": 0,
+    "ParkingDaysAhead": 0,
 
     "Ntfy": {
         "Enabled": false,

@@ -29,9 +29,8 @@ PowerShell script that automatically books a desk and parking spot via the Flexo
 - Lists all buildings, locations, bookables, and user info
 
 ## Manual Booking for a Specific Date
-Run `.\FlexopusAutoBook.ps1 -Date "2026-03-05"` to book for a specific date.
+Run `.\FlexopusAutoBook.ps1 -Date "yyyy-MM-dd"` to book for a specific date.
 
 ## Important
 - `config.json` is gitignored — never commit it
 - `config.example.json` is the shareable template
-- The original production script lives in `../Flexopus/` and must not be modified

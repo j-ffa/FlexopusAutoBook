@@ -17,6 +17,9 @@ if (-not (Test-Path $configPath)) {
 }
 $json = Get-Content -Path $configPath -Raw | ConvertFrom-Json
 
+# Ensure TLS 1.2 (PS 5.1 defaults to TLS 1.0 which most APIs reject)
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 $Domain   = $json.Domain
 $ApiToken = $json.ApiToken
 $Email    = $json.UserEmail

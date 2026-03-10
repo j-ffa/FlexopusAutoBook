@@ -36,7 +36,7 @@ This lists all buildings, locations, and bookable resources with their IDs. Copy
 Or book for a specific date:
 
 ```powershell
-.\FlexopusAutoBook.ps1 -Date "2026-03-20"
+.\FlexopusAutoBook.ps1 -Date "yyyy-MM-dd"
 ```
 
 ### 4. Schedule it (optional)
@@ -63,8 +63,8 @@ Register-ScheduledTask -TaskName 'FlexopusAutoBook' -Action $action -Trigger $tr
 | `BookableNames` | Map of bookable ID (as string) to friendly name, e.g. `"32": "Table 6"` |
 | `DeskFallbacks` | Array of `{ BookableId, LocationId }` alternatives |
 | `ParkingFallbacks` | Array of `{ BookableId, LocationId }` alternatives |
-| `DeskDaysAhead` | Days ahead to book desk (default: 14) |
-| `ParkingDaysAhead` | Days ahead to book parking (default: 7) |
+| `DeskDaysAhead` | Days ahead to book desk (check your Flexopus admin settings) |
+| `ParkingDaysAhead` | Days ahead to book parking (check your Flexopus admin settings) |
 | `Ntfy.Enabled` | `true` to send push notifications via ntfy.sh |
 | `Ntfy.Topic` | Your ntfy.sh topic (pick something unique/random) |
 | `Ntfy.Server` | ntfy server URL (default: `https://ntfy.sh`) |
