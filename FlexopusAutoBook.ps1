@@ -60,11 +60,36 @@ if ($json.ParkingFallbacks) {
     })
 }
 
+# Parse annual leave dates — supports individual dates and { From, To } ranges
+$annualLeaveDates = @()
+if ($json.AnnualLeave) {
+    foreach ($entry in $json.AnnualLeave) {
+        if ($entry -is [string]) {
+            $annualLeaveDates += [datetime]::ParseExact($entry, "yyyy-MM-dd", $null)
+        }
+        elseif ($entry.From -and $entry.To) {
+            $rangeStart = [datetime]::ParseExact($entry.From, "yyyy-MM-dd", $null)
+            $rangeEnd   = [datetime]::ParseExact($entry.To, "yyyy-MM-dd", $null)
+            $current = $rangeStart
+            while ($current -le $rangeEnd) {
+                $annualLeaveDates += $current
+                $current = $current.AddDays(1)
+            }
+        }
+    }
+}
+
+# Resolve timezone: use config value, fall back to system local timezone
+$timezoneName = if ($json.Timezone) { $json.Timezone } else { [TimeZoneInfo]::Local.Id }
+$Timezone = [TimeZoneInfo]::FindSystemTimeZoneById($timezoneName)
+
 $Config = @{
     Domain           = $json.Domain
     ApiToken         = $json.ApiToken
     UserId           = [int]$json.UserId
     UserEmail        = $json.UserEmail
+    Timezone         = $Timezone
+    AnnualLeave      = $annualLeaveDates
     Desk             = @{
         BookableId = [int]$json.Desk.BookableId
         LocationId = [int]$json.Desk.LocationId
@@ -203,6 +228,12 @@ function Get-NextTargetDate {
     return $target
 }
 
+function Test-AnnualLeave {
+    param([datetime]$TargetDate)
+    if ($Config.AnnualLeave.Count -eq 0) { return $false }
+    return ($Config.AnnualLeave -contains $TargetDate.Date)
+}
+
 function Test-BookableAvailable {
     param(
         [int]$BookableId,
@@ -233,9 +264,21 @@ function New-Booking {
         [datetime]$TargetDate
     )
 
-    $fromDateTime = "$($TargetDate.ToString('yyyy-MM-dd'))T${FromTime}:00.000000Z"
+    # Convert local times to UTC using the configured timezone for the target date
+    # (DST offset depends on the booking date, not today)
+    $fromLocal = [DateTime]::ParseExact(
+        "$($TargetDate.ToString('yyyy-MM-dd'))T${FromTime}:00",
+        "yyyy-MM-dd\THH:mm:ss", $null)
+    $fromUtc = [TimeZoneInfo]::ConvertTimeToUtc($fromLocal, $Config.Timezone)
+    $fromDateTime = $fromUtc.ToString("yyyy-MM-dd\THH:mm:ss.000000\Z")
 
-    $toDateTime = "$($TargetDate.ToString('yyyy-MM-dd'))T${ToTime}:00.000000Z"
+    $toLocal = [DateTime]::ParseExact(
+        "$($TargetDate.ToString('yyyy-MM-dd'))T${ToTime}:00",
+        "yyyy-MM-dd\THH:mm:ss", $null)
+    $toUtc = [TimeZoneInfo]::ConvertTimeToUtc($toLocal, $Config.Timezone)
+    $toDateTime = $toUtc.ToString("yyyy-MM-dd\THH:mm:ss.000000\Z")
+
+    Write-Log "Timezone: $($Config.Timezone.Id) | $FromTime-$ToTime local -> $($fromUtc.ToString('HH:mm'))-$($toUtc.ToString('HH:mm')) UTC ($($TargetDate.ToString('yyyy-MM-dd')))"
 
     $body = @{
         bookable_id = $BookableId
@@ -387,67 +430,99 @@ if ($Config.Domain -eq "yourcompany" -or $Config.ApiToken -eq "YOUR_API_TOKEN" -
 $deskDate    = Get-NextTargetDate -DaysAhead $Config.DeskDaysAhead
 $parkingDate = Get-NextTargetDate -DaysAhead $Config.ParkingDaysAhead
 
+# Check annual leave
+$deskOnLeave    = Test-AnnualLeave -TargetDate $deskDate
+$parkingOnLeave = Test-AnnualLeave -TargetDate $parkingDate
+
+if ($deskOnLeave -and $parkingOnLeave) {
+    Write-Log "=========================================="
+    Write-Log "Flexopus Auto-Book"
+    Write-Log "  Desk target:    $($deskDate.ToString('yyyy-MM-dd')) ($($deskDate.DayOfWeek)) - ANNUAL LEAVE"
+    Write-Log "  Parking target: $($parkingDate.ToString('yyyy-MM-dd')) ($($parkingDate.DayOfWeek)) - ANNUAL LEAVE"
+    Write-Log "Both target dates are annual leave. Nothing to book."
+    Write-Log "=========================================="
+    exit 0
+}
+
 Write-Log "=========================================="
 Write-Log "Flexopus Auto-Book"
-Write-Log "  Desk target:    $($deskDate.ToString('yyyy-MM-dd')) ($($deskDate.DayOfWeek))"
-Write-Log "  Parking target: $($parkingDate.ToString('yyyy-MM-dd')) ($($parkingDate.DayOfWeek))"
+Write-Log "  Desk target:    $($deskDate.ToString('yyyy-MM-dd')) ($($deskDate.DayOfWeek))$(if ($deskOnLeave) { ' - ANNUAL LEAVE (skipping)' })"
+Write-Log "  Parking target: $($parkingDate.ToString('yyyy-MM-dd')) ($($parkingDate.DayOfWeek))$(if ($parkingOnLeave) { ' - ANNUAL LEAVE (skipping)' })"
 Write-Log "=========================================="
 
 # --- Desk ---
-Write-Log "Checking for existing desk bookings on $($deskDate.ToString('yyyy-MM-dd'))..."
-$deskBookings = Invoke-FlexopusApi -Endpoint "/users/$($Config.UserId)/bookings" -Query @{
-    from = $deskDate.ToString("yyyy-MM-ddT00:00:00Z")
-    to   = $deskDate.AddDays(1).ToString("yyyy-MM-ddT00:00:00Z")
+if ($deskOnLeave) {
+    Write-Log "Desk booking skipped - annual leave on $($deskDate.ToString('yyyy-MM-dd'))."
 }
+else {
+    Write-Log "Checking for existing desk bookings on $($deskDate.ToString('yyyy-MM-dd'))..."
+    $deskBookings = Invoke-FlexopusApi -Endpoint "/users/$($Config.UserId)/bookings" -Query @{
+        from = $deskDate.ToString("yyyy-MM-ddT00:00:00Z")
+        to   = $deskDate.AddDays(1).ToString("yyyy-MM-ddT00:00:00Z")
+    }
 
-$hasDesk = $false
-if ($deskBookings -and $deskBookings.data.Count -gt 0) {
-    foreach ($booking in $deskBookings.data) {
-        if ($booking.bookable.type -eq 0) {
-            Write-Log "Already have a desk booking for this date (ID: $($booking.id), Desk: $($booking.bookable.name)). Skipping desk." -Level "WARN"
-            $hasDesk = $true
+    $hasDesk = $false
+    if ($deskBookings -and $deskBookings.data.Count -gt 0) {
+        foreach ($booking in $deskBookings.data) {
+            if ($booking.bookable.type -eq 0) {
+                Write-Log "Already have a desk booking for this date (ID: $($booking.id), Desk: $($booking.bookable.name)). Skipping desk." -Level "WARN"
+                $hasDesk = $true
+            }
         }
     }
-}
 
-if (-not $hasDesk) {
-    $deskResult = Invoke-BookWithFallback `
-        -ResourceType "Desk" `
-        -Primary $Config.Desk `
-        -Fallbacks $Config.DeskFallbacks `
-        -TargetDate $deskDate
+    if (-not $hasDesk) {
+        $deskResult = Invoke-BookWithFallback `
+            -ResourceType "Desk" `
+            -Primary $Config.Desk `
+            -Fallbacks $Config.DeskFallbacks `
+            -TargetDate $deskDate
+    }
 }
 
 # --- Parking ---
-Write-Log "Checking for existing parking bookings on $($parkingDate.ToString('yyyy-MM-dd'))..."
-$parkingBookings = Invoke-FlexopusApi -Endpoint "/users/$($Config.UserId)/bookings" -Query @{
-    from = $parkingDate.ToString("yyyy-MM-ddT00:00:00Z")
-    to   = $parkingDate.AddDays(1).ToString("yyyy-MM-ddT00:00:00Z")
+if ($parkingOnLeave) {
+    Write-Log "Parking booking skipped - annual leave on $($parkingDate.ToString('yyyy-MM-dd'))."
 }
+else {
+    Write-Log "Checking for existing parking bookings on $($parkingDate.ToString('yyyy-MM-dd'))..."
+    $parkingBookings = Invoke-FlexopusApi -Endpoint "/users/$($Config.UserId)/bookings" -Query @{
+        from = $parkingDate.ToString("yyyy-MM-ddT00:00:00Z")
+        to   = $parkingDate.AddDays(1).ToString("yyyy-MM-ddT00:00:00Z")
+    }
 
-$hasParking = $false
-if ($parkingBookings -and $parkingBookings.data.Count -gt 0) {
-    foreach ($booking in $parkingBookings.data) {
-        if ($booking.bookable.type -eq 1) {
-            Write-Log "Already have a parking booking for this date (ID: $($booking.id), Spot: $($booking.bookable.name)). Skipping parking." -Level "WARN"
-            $hasParking = $true
+    $hasParking = $false
+    if ($parkingBookings -and $parkingBookings.data.Count -gt 0) {
+        foreach ($booking in $parkingBookings.data) {
+            if ($booking.bookable.type -eq 1) {
+                Write-Log "Already have a parking booking for this date (ID: $($booking.id), Spot: $($booking.bookable.name)). Skipping parking." -Level "WARN"
+                $hasParking = $true
+            }
         }
+    }
+
+    if (-not $hasParking) {
+        $parkingResult = Invoke-BookWithFallback `
+            -ResourceType "Parking" `
+            -Primary $Config.Parking `
+            -Fallbacks $Config.ParkingFallbacks `
+            -TargetDate $parkingDate
     }
 }
 
-if (-not $hasParking) {
-    $parkingResult = Invoke-BookWithFallback `
-        -ResourceType "Parking" `
-        -Primary $Config.Parking `
-        -Fallbacks $Config.ParkingFallbacks `
-        -TargetDate $parkingDate
-}
-
 # --- Send ntfy notification ---
-$dateLabel = $parkingDate.ToString("ddd dd MMM")
+$parkingDateLabel = $parkingDate.ToString("ddd dd MMM")
+$deskDateLabel = $deskDate.ToString("ddd dd MMM")
 
 # Build parking part of the notification
-if ($hasParking) {
+$parkingMsg = ""
+$ntfyTitle = ""
+$ntfyTags = ""
+
+if ($parkingOnLeave) {
+    # No notification for leave-skipped resources
+}
+elseif ($hasParking) {
     $ntfyTitle = "Already booked"
     $parkingMsg = "Parking: already booked"
     $ntfyTags = "parking,white_check_mark"
@@ -459,48 +534,64 @@ elseif ($parkingResult -and $parkingResult.Success) {
         $primaryName = $Config.BookableNames[[int]$Config.Parking.BookableId]
         if (-not $primaryName) { $primaryName = "Spot $($Config.Parking.BookableId)" }
         $ntfyTitle = "$spotName (fallback)"
-        $parkingMsg = "$primaryName was taken. Booked $spotName for $dateLabel."
+        $parkingMsg = "$primaryName was taken. Booked $spotName for $parkingDateLabel."
     }
     else {
         $ntfyTitle = "$spotName"
-        $parkingMsg = "Booked for $dateLabel."
+        $parkingMsg = "Booked for $parkingDateLabel."
     }
     $ntfyTags = "parking,white_check_mark"
 }
-else {
+elseif (-not $parkingOnLeave) {
     $ntfyTitle = "Parking failed"
-    $parkingMsg = "No spots available for $dateLabel."
+    $parkingMsg = "No spots available for $parkingDateLabel."
     $ntfyTags = "parking,x"
 }
 
 # Build desk part
-if ($hasDesk) {
-    $deskMsg = "Desk: already booked"
+$deskMsg = ""
+
+if ($deskOnLeave) {
+    # No notification for leave-skipped resources
+}
+elseif ($hasDesk) {
+    $deskMsg = "Desk: already booked for $deskDateLabel"
 }
 elseif ($deskResult -and $deskResult.Success) {
     $deskName = $Config.BookableNames[[int]$deskResult.BookableId]
     if (-not $deskName) { $deskName = "Desk $($deskResult.BookableId)" }
     if ($deskResult.IsFallback) {
-        $deskMsg = "Desk: $deskName (fallback)"
+        $deskMsg = "Desk: $deskName (fallback) for $deskDateLabel"
     }
     else {
-        $deskMsg = "Desk: $deskName"
+        $deskMsg = "Desk: $deskName for $deskDateLabel"
     }
 }
-else {
-    $deskMsg = "Desk: failed"
+elseif (-not $deskOnLeave) {
+    $deskMsg = "Desk: failed for $deskDateLabel"
 }
 
 # Combine into notification body
-if ($hasParking -and $hasDesk) {
+if ($parkingOnLeave -and $deskOnLeave) {
+    # Both on leave — early exit above handles this, but defensive guard
+}
+elseif (-not $parkingOnLeave -and -not $deskOnLeave -and $hasParking -and $hasDesk) {
     $ntfyTitle = "Already booked"
-    $ntfyBody = "Parking and desk already booked for $dateLabel"
+    if ($deskDate -eq $parkingDate) {
+        $ntfyBody = "Parking and desk already booked for $parkingDateLabel"
+    }
+    else {
+        $ntfyBody = "Desk already booked for $deskDateLabel, parking for $parkingDateLabel"
+    }
 }
 else {
-    $ntfyBody = "$parkingMsg $deskMsg"
+    $parts = @($parkingMsg, $deskMsg) | Where-Object { $_ -ne "" }
+    $ntfyBody = $parts -join " "
 }
 
-Send-NtfyNotification -Title $ntfyTitle -Message $ntfyBody -Tags $ntfyTags
+if ($ntfyBody) {
+    Send-NtfyNotification -Title $ntfyTitle -Message $ntfyBody -Tags $ntfyTags
+}
 
 Write-Log "=========================================="
 Write-Log "Auto-book complete."

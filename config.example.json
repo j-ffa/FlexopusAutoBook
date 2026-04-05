@@ -3,6 +3,7 @@
     "ApiToken": "YOUR_API_TOKEN",
     "UserId": 0,
     "UserEmail": "you@yourcompany.com",
+    "Timezone": "GMT Standard Time",
 
     "Desk": {
         "BookableId": 0,
@@ -29,6 +30,11 @@
 
     "DeskDaysAhead": 0,
     "ParkingDaysAhead": 0,
+
+    "AnnualLeave": [
+        "2026-01-01",
+        { "From": "2026-12-24", "To": "2026-12-26" }
+    ],
 
     "Ntfy": {
         "Enabled": false,

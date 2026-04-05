@@ -58,22 +58,39 @@ Register-ScheduledTask -TaskName 'FlexopusAutoBook' -Action $action -Trigger $tr
 | `ApiToken` | Bearer token for the API |
 | `UserId` | Your Flexopus user ID |
 | `UserEmail` | Your email (used by Discover.ps1) |
+| `Timezone` | Windows timezone ID (e.g. `"GMT Standard Time"`); falls back to system local if omitted |
 | `Desk` | Primary desk: `BookableId`, `LocationId`, `FromTime`, `ToTime` |
 | `Parking` | Primary parking: same fields as Desk |
 | `BookableNames` | Map of bookable ID (as string) to friendly name, e.g. `"32": "Table 6"` |
 | `DeskFallbacks` | Array of `{ BookableId, LocationId }` alternatives |
 | `ParkingFallbacks` | Array of `{ BookableId, LocationId }` alternatives |
-| `DeskDaysAhead` | Days ahead to book desk (check your Flexopus admin settings) |
-| `ParkingDaysAhead` | Days ahead to book parking (check your Flexopus admin settings) |
+| `DeskDaysAhead` | Days ahead to book desk (0 = today/next weekday; check your Flexopus admin settings for max) |
+| `ParkingDaysAhead` | Days ahead to book parking (0 = today/next weekday; check your Flexopus admin settings for max) |
+| `AnnualLeave` | Array of dates (`"2026-01-01"`) and/or ranges (`{ "From": "...", "To": "..." }`) to skip |
 | `Ntfy.Enabled` | `true` to send push notifications via ntfy.sh |
 | `Ntfy.Topic` | Your ntfy.sh topic (pick something unique/random) |
 | `Ntfy.Server` | ntfy server URL (default: `https://ntfy.sh`) |
+
+## Annual Leave
+
+Add dates you won't be working to `AnnualLeave` in `config.json`. Bookings are skipped for those dates (not shifted to the next day).
+
+Supports individual dates and date ranges:
+
+```json
+"AnnualLeave": [
+    "2026-04-10",
+    { "From": "2026-12-24", "To": "2026-12-31" }
+]
+```
+
+Set to `[]` to disable.
 
 ## Push Notifications
 
 Uses [ntfy.sh](https://ntfy.sh) for free push notifications — no account required.
 
-1. Install the [ntfy Android app](https://play.google.com/store/apps/details?id=io.heckel.ntfy)
+1. Install the ntfy app ([Android](https://play.google.com/store/apps/details?id=io.heckel.ntfy) / [iOS](https://apps.apple.com/app/ntfy/id1625396347))
 2. Set `Ntfy.Enabled` to `true` in `config.json`
 3. Pick a unique topic string and subscribe to it in the app
 4. Set `Ntfy.Topic` to that same string
