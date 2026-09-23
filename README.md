@@ -86,6 +86,21 @@ Supports individual dates and date ranges:
 
 Set to `[]` to disable.
 
+### Leave calendar
+
+Instead of editing `config.json` by hand, you can pick leave on a calendar in your browser. Double-click `LeaveUI.cmd`, or run:
+
+```powershell
+.\LeaveUI.ps1
+```
+
+Click the first and last day of your leave, add it, then save. The dates are written to `AnnualLeave` in `config.json`, which the booking script reads on every run, so there's nothing else to update. The scheduled task stays as it is.
+
+- The page is served by a small web server that only this PC can reach (`http://localhost:8765`). It runs until you click **Close** on the page or press Ctrl+C in its window.
+- Only the `AnnualLeave` section of `config.json` is rewritten; everything else, including formatting, stays as it is. The previous version is kept as `config.backup.json`.
+- Adding leave doesn't cancel bookings the script has already made (it books `DeskDaysAhead` / `ParkingDaysAhead` days ahead). The calendar warns you when a selection falls in that window so you can cancel those in Flexopus.
+- Use `-Port` to pick a different port, or `-NoBrowser` to start the server without opening a browser.
+
 ## Push Notifications
 
 Uses [ntfy.sh](https://ntfy.sh) for free push notifications — no account required.
@@ -101,6 +116,10 @@ Uses [ntfy.sh](https://ntfy.sh) for free push notifications — no account requi
 |------|-----------|---------|
 | `FlexopusAutoBook.ps1` | Yes | Main booking script |
 | `Discover.ps1` | Yes | ID discovery helper |
+| `LeaveUI.ps1` | Yes | Local web server for the leave calendar |
+| `LeaveUI.html` | Yes | The leave calendar page |
+| `LeaveUI.cmd` | Yes | Double-click launcher for `LeaveUI.ps1` |
 | `config.example.json` | Yes | Config template with placeholders |
 | `config.json` | **No** | Your real config (gitignored) |
+| `config.backup.json` | **No** | Previous config, kept by the leave calendar when it saves (gitignored) |
 | `*.log` | **No** | Runtime logs (gitignored) |

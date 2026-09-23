@@ -6,6 +6,7 @@ PowerShell script that automatically books a desk and parking spot via the Flexo
 ## Key Files
 - `FlexopusAutoBook.ps1` — Main script (booking logic, discovery mode, fallback support)
 - `Discover.ps1` — Standalone discovery script for finding IDs
+- `LeaveUI.ps1` / `LeaveUI.html` / `LeaveUI.cmd` — Browser calendar for editing `AnnualLeave` (see below)
 - `config.json` — User config (gitignored, contains secrets)
 - `config.example.json` — Template with placeholders (committed)
 
@@ -29,6 +30,17 @@ PowerShell script that automatically books a desk and parking spot via the Flexo
 - If both desk and parking dates are on leave, the script exits early
 - Annual leave does NOT advance the target date — it simply skips (avoids double-bookings from subsequent runs)
 - Weekend skipping happens in `Get-NextTargetDate`; annual leave is checked separately after date calculation
+
+## Leave Calendar (LeaveUI)
+- `LeaveUI.ps1` runs a `System.Net.HttpListener` on `http://localhost:8765/` (tries the next 9 ports if taken) and serves `LeaveUI.html`; `localhost` prefixes work without admin
+- API: `GET /api/leave`, `PUT /api/leave` (`{ leave: [{from,to}], version }`), `POST /api/close`. Never return `ApiToken` or the ntfy topic — this is a public repo
+- Saving edits the config **text**: it finds the top-level `AnnualLeave` array and replaces just that span, so the rest of the file keeps its formatting, BOM and line endings. It then re-parses and checks no other setting changed before swapping the file in with `[IO.File]::Replace` (backup: `config.backup.json`)
+- Ranges are sorted and merged (overlapping/adjacent) on both client and server; single days are written as strings, longer leave as one-line `{ "From", "To" }` objects
+- `version` is the canonical leave list; a mismatch on PUT returns 409 so an outside edit to `config.json` isn't overwritten
+- PUT/POST from another `Origin` get 403; PUT must be `application/json`
+- No change to `FlexopusAutoBook.ps1` or the scheduled task is needed: the script reads `config.json` fresh every run
+- `-ConfigPath` points the server at a different config — use a copy of `config.example.json` when testing, never the live config
+- Testing from WSL: in NAT networking mode WSL can't reach the Windows-side listener, so drive it via `powershell.exe` (`Invoke-WebRequest http://localhost:PORT/...`)
 
 ## Config Loading
 - JSON is read and mapped to a `$Config` hashtable at script start
