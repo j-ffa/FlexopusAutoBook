@@ -111,7 +111,7 @@ $Config = @{
     Ntfy             = @{
         Enabled = [bool]$json.Ntfy.Enabled
         Topic   = $json.Ntfy.Topic
-        Server  = $json.Ntfy.Server
+        Server  = if ($json.Ntfy.Server) { $json.Ntfy.Server } else { "https://ntfy.sh" }
     }
 }
 
@@ -250,8 +250,7 @@ function Test-BookableAvailable {
 
     if ($null -eq $result) { return $false }
 
-    # If there are existing bookings for that day, the slot may be taken
-    # Check if any booking overlaps with our desired time
+    # Any existing booking on that day counts as taken (times aren't compared)
     return ($result.data.Count -eq 0)
 }
 
