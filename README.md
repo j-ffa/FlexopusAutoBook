@@ -1,81 +1,70 @@
 # FlexopusAutoBook
 
-PowerShell script that automatically books a desk and parking spot via the Flexopus REST API. Designed to run daily on weekdays via Windows Task Scheduler.
+PowerShell script that automatically books a desk and parking spot via the Flexopus REST API. Designed to run each weekday via Windows Task Scheduler.
+
+## Requirements
+
+- Windows with PowerShell 5.1 or later
+- A Flexopus API token (Dashboard > Settings > Integrations > Flexopus API)
+- Permission to run scripts. If PowerShell refuses to run them, allow local scripts for your account (and unblock the files if you downloaded a ZIP):
+
+  ```powershell
+  Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+  Get-ChildItem *.ps1 | Unblock-File
+  ```
 
 ## Quick Start
 
-### 1. Create your config
+1. **Create your config**, then fill in `Domain`, `ApiToken` and `UserEmail`:
 
-```powershell
-Copy-Item config.example.json config.json
-```
+   ```powershell
+   Copy-Item config.example.json config.json
+   ```
 
-Edit `config.json` and fill in at minimum:
-- `Domain` — your Flexopus tenant (e.g. `"yourcompany"` for yourcompany.flexopus.com)
-- `ApiToken` — from Dashboard > Settings > Integrations > Flexopus API
-- `UserEmail` — your Flexopus login email
+2. **Find your IDs.** This lists your user ID and every building, location and bookable resource with its ID:
 
-### 2. Discover your IDs
+   ```powershell
+   .\Discover.ps1
+   ```
 
-```powershell
-.\Discover.ps1
-```
+   `.\FlexopusAutoBook.ps1 -Discover` does the same and also shows each resource's status and tags. Copy your `UserId` and the desk and parking IDs you want into `config.json` (see [Config Reference](#config-reference)).
 
-This lists all buildings, locations, and bookable resources with their IDs. Copy the relevant IDs into `config.json`:
-- `UserId` — your user ID
-- `Desk.BookableId` / `Desk.LocationId` — your preferred desk
-- `Parking.BookableId` / `Parking.LocationId` — your preferred parking spot
-- `ParkingFallbacks` / `DeskFallbacks` — optional alternatives
+3. **Run it once.** This makes a **real booking** for the next target dates:
 
-### 3. Test a booking
+   ```powershell
+   .\FlexopusAutoBook.ps1
+   ```
 
-```powershell
-.\FlexopusAutoBook.ps1
-```
+   Add `-Date "yyyy-MM-dd"` to book both desk and parking for that date instead. Weekends aren't skipped, but annual leave is.
 
-Or book for a specific date:
+4. **Schedule it (optional).** In PowerShell as admin, this runs it just after midnight each weekday:
 
-```powershell
-.\FlexopusAutoBook.ps1 -Date "yyyy-MM-dd"
-```
-
-### 4. Schedule it (optional)
-
-Run in PowerShell as admin:
-
-```powershell
-$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -ExecutionPolicy Bypass -File "C:\path\to\FlexopusAutoBook\FlexopusAutoBook.ps1"'
-$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday -At 00:00:05
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -WakeToRun
-Register-ScheduledTask -TaskName 'FlexopusAutoBook' -Action $action -Trigger $trigger -Settings $settings -Description 'Auto-book desk and parking in Flexopus on weekdays'
-```
+   ```powershell
+   $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -ExecutionPolicy Bypass -File "C:\path\to\FlexopusAutoBook\FlexopusAutoBook.ps1"'
+   $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday -At 00:00:05
+   $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -WakeToRun
+   Register-ScheduledTask -TaskName 'FlexopusAutoBook' -Action $action -Trigger $trigger -Settings $settings -Description 'Auto-book desk and parking in Flexopus on weekdays'
+   ```
 
 ## Config Reference
 
 | Field | Description |
 |-------|-------------|
-| `Domain` | Flexopus tenant subdomain |
-| `ApiToken` | Bearer token for the API |
+| `Domain` | Your Flexopus tenant, e.g. `"yourcompany"` for yourcompany.flexopus.com |
+| `ApiToken` | Your Flexopus API token |
+| `UserEmail` | Your Flexopus login email, used to find your user ID during discovery |
 | `UserId` | Your Flexopus user ID |
-| `UserEmail` | Your email (used by Discover.ps1) |
-| `Timezone` | Windows timezone ID (e.g. `"GMT Standard Time"`); falls back to system local if omitted |
-| `Desk` | Primary desk: `BookableId`, `LocationId`, `FromTime`, `ToTime` |
-| `Parking` | Primary parking: same fields as Desk |
-| `BookableNames` | Map of bookable ID (as string) to friendly name, e.g. `"32": "Table 6"` |
-| `DeskFallbacks` | Array of `{ BookableId, LocationId }` alternatives |
-| `ParkingFallbacks` | Array of `{ BookableId, LocationId }` alternatives |
-| `DeskDaysAhead` | Days ahead to book desk (0 = today/next weekday; check your Flexopus admin settings for max) |
-| `ParkingDaysAhead` | Days ahead to book parking (0 = today/next weekday; check your Flexopus admin settings for max) |
-| `AnnualLeave` | Array of dates (`"2026-01-01"`) and/or ranges (`{ "From": "...", "To": "..." }`) to skip |
-| `Ntfy.Enabled` | `true` to send push notifications via ntfy.sh |
-| `Ntfy.Topic` | Your ntfy.sh topic (pick something unique/random) |
-| `Ntfy.Server` | ntfy server URL (default: `https://ntfy.sh`) |
+| `Timezone` | Windows timezone ID, e.g. `"GMT Standard Time"`. Defaults to the PC's timezone |
+| `Desk`, `Parking` | Your preferred desk and parking spot: `BookableId`, `LocationId`, and `FromTime` / `ToTime` as `"HH:mm"` local time in `Timezone` |
+| `DeskFallbacks`, `ParkingFallbacks` | Alternatives tried in order when the preferred one is taken: `{ BookableId, LocationId }` objects, booked for the same times |
+| `DeskDaysAhead`, `ParkingDaysAhead` | How many days ahead to book (0 = today). Dates that land on a weekend move to Monday. With the weekday schedule above, use a multiple of 7 or one more (0, 1, 7, 8, 14, 15, …), or some weekdays never get booked. Your Flexopus admin settings set the maximum |
+| `BookableNames` | Optional friendly names for notifications, keyed by bookable ID as a string, e.g. `"32": "Table 6"` |
+| `AnnualLeave` | Dates not to book. See [Annual Leave](#annual-leave) |
+| `Ntfy` | `Enabled`, `Topic` and `Server` (default `https://ntfy.sh`). See [Push Notifications](#push-notifications) |
 
 ## Annual Leave
 
-Add dates you won't be working to `AnnualLeave` in `config.json`. Bookings are skipped for those dates (not shifted to the next day).
-
-Supports individual dates and date ranges:
+Nothing is booked for dates in `AnnualLeave`; the booking is skipped, not moved to another day. List single dates and date ranges, or use `[]` for none:
 
 ```json
 "AnnualLeave": [
@@ -84,42 +73,26 @@ Supports individual dates and date ranges:
 ]
 ```
 
-Set to `[]` to disable.
-
 ### Leave calendar
 
-Instead of editing `config.json` by hand, you can pick leave on a calendar in your browser. Double-click `LeaveUI.cmd`, or run:
+To pick leave on a calendar instead, double-click `LeaveUI.cmd` or run `.\LeaveUI.ps1`. Click the first and last day of your leave, add it, then save. The booking script reads `config.json` on every run, so nothing else needs updating.
 
-```powershell
-.\LeaveUI.ps1
-```
-
-Click the first and last day of your leave, add it, then save. The dates are written to `AnnualLeave` in `config.json`, which the booking script reads on every run, so there's nothing else to update. The scheduled task stays as it is.
-
-- The page is served by a small web server that only this PC can reach (`http://localhost:8765`). It runs until you click **Close** on the page or press Ctrl+C in its window.
-- Only the `AnnualLeave` section of `config.json` is rewritten; everything else, including formatting, stays as it is. The previous version is kept as `config.backup.json`.
-- Adding leave doesn't cancel bookings the script has already made (it books `DeskDaysAhead` / `ParkingDaysAhead` days ahead). The calendar warns you when a selection falls in that window so you can cancel those in Flexopus.
-- Use `-Port` to pick a different port, or `-NoBrowser` to start the server without opening a browser.
+- The page is served only to this PC, at `http://localhost:8765` (use `-Port` to change it, or `-NoBrowser` to skip opening a browser). Click **Close** on the page or press Ctrl+C in its window to stop it.
+- Saving rewrites only `AnnualLeave` in `config.json` and keeps the previous file as `config.backup.json`. It doesn't cancel bookings the script has already made; the calendar warns you when your leave falls on dates already booked, so you can cancel those in Flexopus.
 
 ## Push Notifications
 
-Uses [ntfy.sh](https://ntfy.sh) for free push notifications — no account required.
+Uses [ntfy.sh](https://ntfy.sh) for free push notifications, no account required.
 
-1. Install the ntfy app ([Android](https://play.google.com/store/apps/details?id=io.heckel.ntfy) / [iOS](https://apps.apple.com/app/ntfy/id1625396347))
-2. Set `Ntfy.Enabled` to `true` in `config.json`
-3. Pick a unique topic string and subscribe to it in the app
-4. Set `Ntfy.Topic` to that same string
+1. Install the ntfy app ([Android](https://play.google.com/store/apps/details?id=io.heckel.ntfy) / [iOS](https://apps.apple.com/app/ntfy/id1625396347)).
+2. Pick a unique, hard-to-guess topic name and subscribe to it in the app. Anyone who knows the name can read it.
+3. In `config.json`, set `Ntfy.Enabled` to `true` and `Ntfy.Topic` to that name.
 
 ## Files
 
-| File | Committed | Purpose |
-|------|-----------|---------|
-| `FlexopusAutoBook.ps1` | Yes | Main booking script |
-| `Discover.ps1` | Yes | ID discovery helper |
-| `LeaveUI.ps1` | Yes | Local web server for the leave calendar |
-| `LeaveUI.html` | Yes | The leave calendar page |
-| `LeaveUI.cmd` | Yes | Double-click launcher for `LeaveUI.ps1` |
-| `config.example.json` | Yes | Config template with placeholders |
-| `config.json` | **No** | Your real config (gitignored) |
-| `config.backup.json` | **No** | Previous config, kept by the leave calendar when it saves (gitignored) |
-| `*.log` | **No** | Runtime logs (gitignored) |
+- `FlexopusAutoBook.ps1`: the booking script
+- `Discover.ps1`: lists the IDs you need for `config.json`
+- `LeaveUI.ps1`, `LeaveUI.html`, `LeaveUI.cmd`: the leave calendar's server, page and double-click launcher
+- `config.example.json`: the config template
+
+Your `config.json`, the leave calendar's `config.backup.json` and the script's `FlexopusAutoBook.log` stay on your PC: `config*.json` (except the template) and `*.log` are gitignored.
