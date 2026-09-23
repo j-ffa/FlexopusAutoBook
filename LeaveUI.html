@@ -1,0 +1,963 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Annual leave – FlexopusAutoBook</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --ground: #e9edf1;
+    --surface: #ffffff;
+    --ink: #1d2733;
+    --muted: #5f6c7b;
+    --rule: #d6dce3;
+    --weekend: #f2f4f7;
+    --marker: #ffe24a;
+    --marker-past: #efe4a8;
+    --marker-ink: #1d2733;
+    --focus: #2256d8;
+    --warn-bg: #fff2d6;
+    --warn-ink: #7a4300;
+    --danger: #b42318;
+    --shadow: 0 10px 30px rgba(29, 39, 51, 0.16);
+    --font-display: Bahnschrift, "DIN Alternate", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #151a21;
+      --surface: #1e252e;
+      --ink: #e4e8ed;
+      --muted: #97a3b1;
+      --rule: #323d4a;
+      --weekend: #1a2028;
+      --marker: #e8c730;
+      --marker-past: #5d5427;
+      --marker-ink: #171b20;
+      --focus: #7ea4ff;
+      --warn-bg: #3a2b10;
+      --warn-ink: #f2c879;
+      --danger: #ff8f84;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 15px/1.5 var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 36px 20px 140px;
+  }
+
+  /* Masthead */
+  .masthead {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+    margin-bottom: 24px;
+  }
+  h1 {
+    margin: 0 0 6px;
+    font: 600 36px/1.1 var(--font-display);
+    letter-spacing: -0.01em;
+  }
+  .lede { margin: 0; max-width: 62ch; color: var(--muted); }
+
+  /* Buttons */
+  .btn {
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn.primary { background: var(--ink); color: var(--surface); }
+  .btn.primary:hover { opacity: 0.88; }
+  .btn.quiet { background: transparent; border-color: var(--rule); }
+  .btn.quiet:hover { background: var(--weekend); }
+  .btn:disabled { opacity: 0.55; cursor: default; }
+  .link {
+    border: 0;
+    background: none;
+    padding: 4px 2px;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: var(--rule);
+  }
+  .link:hover { text-decoration-color: currentColor; }
+  .link.danger { color: var(--danger); }
+
+  /* Planner */
+  .planner {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+  }
+  .planner-head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .legend li { display: flex; align-items: center; gap: 8px; }
+  .swatch { width: 26px; height: 14px; display: inline-block; }
+  .swatch.leave { background: var(--marker); border-radius: 8px 4px 6px 3px; }
+  .swatch.picked { border-block: 2px dashed var(--ink); }
+  .swatch.booked { width: 14px; display: grid; place-items: center; }
+  .swatch.booked::after { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--muted); }
+  .nav { display: flex; gap: 6px; }
+  .nav .btn { height: 36px; padding-block: 0; }
+  .icon-btn {
+    width: 36px; height: 36px;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: transparent;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--weekend); }
+
+  .months {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 28px 36px;
+    padding: 20px;
+  }
+  .month h2 {
+    margin: 0 0 10px;
+    font: 600 19px/1.2 var(--font-display);
+  }
+  .weekdays, .days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+  }
+  .weekdays {
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    padding-bottom: 4px;
+  }
+  .weekdays span:nth-child(n+6) { opacity: 0.7; }
+
+  .day {
+    position: relative;
+    isolation: isolate;
+    height: 42px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: 500 15px/1 var(--font-display);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+  .day:disabled { cursor: default; color: var(--muted); opacity: 0.5; }
+  .day.weekend { color: var(--muted); }
+  .day.weekend::before { content: ""; position: absolute; inset: 0; background: var(--weekend); z-index: -2; }
+  .num {
+    display: inline-grid;
+    place-items: center;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    position: relative;
+  }
+  .day:not(:disabled):hover .num { background: var(--weekend); }
+  .day.leave:not(:disabled):hover .num { background: transparent; }
+  .day.today .num { box-shadow: inset 0 0 0 2px var(--ink); font-weight: 700; }
+
+  /* Leave: a highlighter stroke across the days */
+  .day.leave { color: var(--marker-ink); }
+  .day.leave::after {
+    content: "";
+    position: absolute;
+    inset: 7px 0;
+    z-index: -1;
+    background: var(--marker);
+  }
+  .day.leave:disabled { opacity: 1; }
+  .day.leave:disabled::after { background: var(--marker-past); }
+  .day.leave.band-l::after { left: 4px; border-top-left-radius: 11px 15px; border-bottom-left-radius: 6px 9px; }
+  .day.leave.band-r::after { right: 4px; border-top-right-radius: 6px 9px; border-bottom-right-radius: 11px 15px; }
+
+  /* Picking: dashed outline over the days being chosen */
+  .day .pick {
+    position: absolute;
+    inset: 4px 0;
+    border-block: 2px dashed transparent;
+    pointer-events: none;
+  }
+  .day.sel .pick { border-color: var(--ink); }
+  .day.sel.sel-l .pick { left: 2px; border-left: 2px dashed var(--ink); border-radius: 10px 0 0 10px; }
+  .day.sel.sel-r .pick { right: 2px; border-right: 2px dashed var(--ink); border-radius: 0 10px 10px 0; }
+
+  /* Days the script may already have booked */
+  .day.booked .num::after {
+    content: "";
+    position: absolute;
+    bottom: -3px;
+    left: 50%;
+    width: 4px; height: 4px;
+    margin-left: -2px;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+  .day.leave.booked .num::after { background: var(--marker-ink); }
+
+  /* Selection panel */
+  .selection {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 24px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--rule);
+    min-height: 74px;
+  }
+  .selection .hint { margin: 0; color: var(--muted); }
+  .selection-title { margin: 0; font: 600 18px/1.3 var(--font-display); }
+  .selection-meta { margin: 2px 0 0; color: var(--muted); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .warning {
+    flex-basis: 100%;
+    margin: 0;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: var(--warn-bg);
+    color: var(--warn-ink);
+    max-width: 80ch;
+  }
+
+  /* Leave list */
+  .list { margin-top: 36px; max-width: 760px; }
+  .list h2 { margin: 0 0 8px; font: 600 22px/1.2 var(--font-display); }
+  .entries { list-style: none; margin: 0; padding: 0; }
+  .entry {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 14px;
+    padding: 12px 4px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .entry:first-child { border-top: 1px solid var(--rule); }
+  .entry-date {
+    border: 0;
+    background: none;
+    padding: 0;
+    font: 600 16px/1.3 var(--font-display);
+    text-align: left;
+    cursor: pointer;
+  }
+  .entry-date:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .entry-meta { color: var(--muted); font-size: 14px; }
+  .tag {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--marker);
+    color: var(--marker-ink);
+  }
+  .entry .link { margin-left: auto; }
+  .entry.fresh { animation: fresh 1.4s ease-out; }
+  @keyframes fresh { from { background: var(--marker); } to { background: transparent; } }
+  .empty { color: var(--muted); margin: 8px 0 0; }
+  .past { margin-top: 20px; }
+  .past summary { cursor: pointer; color: var(--muted); font-weight: 600; padding: 4px 0; }
+  .past .entry { color: var(--muted); }
+  .past-actions { margin-top: 10px; }
+  .config-path { margin-top: 36px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+
+  /* Save bar */
+  .savebar {
+    position: fixed;
+    left: 50%;
+    bottom: 20px;
+    width: min(760px, calc(100% - 32px));
+    transform: translate(-50%, calc(100% + 40px));
+    visibility: hidden;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 20px;
+    padding: 14px 16px 14px 20px;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    transition: transform 0.25s ease, visibility 0s linear 0.25s;
+  }
+  .savebar.open { transform: translate(-50%, 0); visibility: visible; transition: transform 0.25s ease; }
+  .savebar p { margin: 0; }
+  .savebar .error { color: var(--danger); }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: var(--ink);
+    color: var(--surface);
+    font-weight: 600;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .toast.show { opacity: 1; }
+
+  dialog {
+    max-width: 420px;
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 22px;
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: var(--shadow);
+  }
+  dialog::backdrop { background: rgba(10, 14, 20, 0.45); }
+  dialog h2 { margin: 0 0 8px; font: 600 20px/1.2 var(--font-display); }
+  dialog p { margin: 0 0 18px; color: var(--muted); }
+
+  .notice { max-width: 560px; margin: 12vh auto 0; padding: 0 20px; }
+  .notice h1 { font-size: 30px; }
+  .notice p { color: var(--muted); }
+
+  [hidden] { display: none !important; }
+
+  @media (max-width: 560px) {
+    h1 { font-size: 30px; }
+    .masthead { flex-direction: column; }
+    .months { padding: 16px 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .savebar, .savebar.open, .toast { transition: none; }
+    .entry.fresh { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<main class="page" id="app">
+  <header class="masthead">
+    <div>
+      <h1>Annual leave</h1>
+      <p class="lede">FlexopusAutoBook won't book a desk or parking space on these days. Saved changes apply from the next scheduled run.</p>
+    </div>
+    <button type="button" class="btn quiet" id="closeBtn">Close</button>
+  </header>
+
+  <section class="planner" aria-label="Leave calendar">
+    <div class="planner-head">
+      <ul class="legend">
+        <li><span class="swatch leave"></span>Leave</li>
+        <li><span class="swatch picked"></span>Selected</li>
+        <li><span class="swatch booked"></span>May already be booked</li>
+      </ul>
+      <div class="nav">
+        <button type="button" class="icon-btn" id="prevBtn" aria-label="Previous month">‹</button>
+        <button type="button" class="btn quiet" id="todayBtn">Today</button>
+        <button type="button" class="icon-btn" id="nextBtn" aria-label="Next month">›</button>
+      </div>
+    </div>
+    <div class="months" id="months"></div>
+    <div class="selection" id="selection" aria-live="polite"></div>
+  </section>
+
+  <section class="list" aria-labelledby="listTitle">
+    <h2 id="listTitle">Your leave</h2>
+    <ul class="entries" id="upcoming"></ul>
+    <p class="empty" id="emptyNote" hidden>No upcoming leave. Pick days on the calendar to add some.</p>
+    <details class="past" id="pastWrap" hidden>
+      <summary id="pastSummary">Past leave</summary>
+      <ul class="entries" id="past"></ul>
+      <div class="past-actions">
+        <button type="button" class="link danger" id="removePastBtn">Remove all past leave</button>
+      </div>
+    </details>
+    <p class="config-path" id="configPath"></p>
+  </section>
+</main>
+
+<div class="savebar" id="savebar" role="region" aria-label="Unsaved changes">
+  <p id="saveStatus"></p>
+  <div class="actions">
+    <button type="button" class="btn quiet" id="discardBtn">Discard changes</button>
+    <button type="button" class="btn quiet" id="reloadBtn" hidden>Reload</button>
+    <button type="button" class="btn primary" id="saveBtn">Save changes</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<dialog id="closeDialog">
+  <h2>Close without saving?</h2>
+  <p>Your unsaved leave changes will be lost, and the next run will use the leave already saved in config.json.</p>
+  <div class="actions">
+    <button type="button" class="btn quiet" id="keepEditingBtn">Keep editing</button>
+    <button type="button" class="btn primary" id="closeAnywayBtn">Close without saving</button>
+  </div>
+</dialog>
+
+<div class="notice" id="notice" hidden>
+  <h1 id="noticeTitle"></h1>
+  <p id="noticeText"></p>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const DAY_MS = 86400000;
+  const MONTHS_SHOWN = 3;
+
+  const state = {
+    saved: [],        // leave as saved in config.json: [{ from, to }]
+    draft: [],        // leave as edited on this page
+    version: "",
+    today: "",
+    bookedUntil: { desk: "", parking: "" },
+    view: "",         // first day of the first month shown
+    focus: "",        // day that holds keyboard focus in the calendar
+    pick: null,       // { start, end, hover } while choosing days
+    saving: false,
+    saveError: null,  // { message, conflict }
+    closed: false,
+  };
+
+  // ---- Dates (yyyy-mm-dd strings; maths in UTC to dodge clock changes) ----
+  const toTime = (d) => { const [y, m, day] = d.split("-").map(Number); return Date.UTC(y, m - 1, day); };
+  const toIso = (t) => new Date(t).toISOString().slice(0, 10);
+  const addDays = (d, n) => toIso(toTime(d) + n * DAY_MS);
+  const weekday = (d) => new Date(toTime(d)).getUTCDay();
+  const isWeekend = (d) => weekday(d) === 0 || weekday(d) === 6;
+  const monthStart = (d) => d.slice(0, 8) + "01";
+  const addMonths = (d, n) => {
+    const t = new Date(toTime(d));
+    return toIso(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + n, 1));
+  };
+  const monthEnd = (d) => addDays(addMonths(d, 1), -1);
+
+  const fmt = (options) => new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", ...options });
+  const fmtLong = fmt({ weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const fmtMonth = fmt({ month: "long", year: "numeric" });
+  const show = (f, d) => f.format(new Date(toTime(d)));
+
+  // Built by hand because browsers disagree on commas in short dates ("Fri, 23 Oct 2026")
+  const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function dayLabel(d, withYear = true) {
+    const t = new Date(toTime(d));
+    const label = `${WEEKDAYS[t.getUTCDay()]} ${t.getUTCDate()} ${MONTH_NAMES[t.getUTCMonth()]}`;
+    return withYear ? `${label} ${t.getUTCFullYear()}` : label;
+  }
+
+  function rangeLabel(r) {
+    if (r.from === r.to) return dayLabel(r.from);
+    if (r.from.slice(0, 4) === r.to.slice(0, 4)) return `${dayLabel(r.from, false)} – ${dayLabel(r.to)}`;
+    return `${dayLabel(r.from)} – ${dayLabel(r.to)}`;
+  }
+
+  function workingDays(r) {
+    let count = 0;
+    for (let d = r.from; d <= r.to; d = addDays(d, 1)) if (!isWeekend(d)) count++;
+    return count;
+  }
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+  // ---- Leave ranges ----
+  const key = (r) => `${r.from}/${r.to}`;
+
+  // Sort and merge ranges that overlap or run into each other (the server does the same)
+  function normalise(ranges) {
+    const sorted = ranges.map((r) => ({ from: r.from, to: r.to }))
+      .sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0));
+    const out = [];
+    for (const r of sorted) {
+      const last = out[out.length - 1];
+      if (last && r.from <= addDays(last.to, 1)) {
+        if (r.to > last.to) last.to = r.to;
+      } else {
+        out.push(r);
+      }
+    }
+    return out;
+  }
+
+  function leaveDays(ranges) {
+    const days = new Set();
+    for (const r of ranges) for (let d = r.from; d <= r.to; d = addDays(d, 1)) days.add(d);
+    return days;
+  }
+
+  function changes() {
+    const savedKeys = new Set(state.saved.map(key));
+    const draftKeys = new Set(state.draft.map(key));
+    return {
+      added: state.draft.filter((r) => !savedKeys.has(key(r))).length,
+      removed: state.saved.filter((r) => !draftKeys.has(key(r))).length,
+    };
+  }
+  const isDirty = () => { const c = changes(); return c.added + c.removed > 0; };
+
+  const lastBookedDay = () =>
+    [state.bookedUntil.desk, state.bookedUntil.parking].filter(Boolean).sort().pop() || "";
+
+  // ---- Calendar ----
+  function renderMonths() {
+    const container = $("months");
+    container.textContent = "";
+    const leave = leaveDays(state.draft);
+    const booked = lastBookedDay();
+
+    for (let i = 0; i < MONTHS_SHOWN; i++) {
+      const first = addMonths(state.view, i);
+      const month = document.createElement("div");
+      month.className = "month";
+
+      const title = document.createElement("h2");
+      title.textContent = show(fmtMonth, first);
+      month.appendChild(title);
+
+      const head = document.createElement("div");
+      head.className = "weekdays";
+      head.setAttribute("aria-hidden", "true");
+      for (const w of ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]) {
+        const s = document.createElement("span");
+        s.textContent = w;
+        head.appendChild(s);
+      }
+      month.appendChild(head);
+
+      const grid = document.createElement("div");
+      grid.className = "days";
+      const offset = (weekday(first) + 6) % 7;   // Monday first
+      for (let b = 0; b < offset; b++) grid.appendChild(document.createElement("span"));
+
+      const last = monthEnd(first);
+      for (let d = first, n = 1; d <= last; d = addDays(d, 1), n++) {
+        const col = (offset + n - 1) % 7;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "day";
+        btn.dataset.date = d;
+        btn.dataset.col = col;
+
+        const isLeave = leave.has(d);
+        const cls = btn.classList;
+        if (col >= 5) cls.add("weekend");
+        if (d === state.today) cls.add("today");
+        if (isLeave) {
+          cls.add("leave");
+          if (!leave.has(addDays(d, -1)) || col === 0) cls.add("band-l");
+          if (!leave.has(addDays(d, 1)) || col === 6) cls.add("band-r");
+        }
+        if (booked && d >= state.today && d <= booked) cls.add("booked");
+        btn.disabled = d < state.today;
+        btn.tabIndex = d === state.focus ? 0 : -1;
+
+        let label = show(fmtLong, d);
+        if (isLeave) label += ", leave";
+        if (d === state.today) label += ", today";
+        btn.setAttribute("aria-label", label);
+
+        btn.innerHTML = `<span class="pick"></span><span class="num">${n}</span>`;
+        grid.appendChild(btn);
+      }
+      month.appendChild(grid);
+      container.appendChild(month);
+    }
+    paintPick();
+  }
+
+  function pickBounds() {
+    const p = state.pick;
+    if (!p) return null;
+    const end = p.end || p.hover || p.start;
+    return p.start <= end ? { from: p.start, to: end } : { from: end, to: p.start };
+  }
+
+  // Updates the dashed outline without rebuilding the calendar (keeps focus and hover intact)
+  function paintPick() {
+    const r = pickBounds();
+    for (const el of document.querySelectorAll(".day[data-date]")) {
+      const d = el.dataset.date;
+      const col = Number(el.dataset.col);
+      const inside = !!r && d >= r.from && d <= r.to;
+      el.classList.toggle("sel", inside);
+      el.classList.toggle("sel-l", inside && (d === r.from || col === 0));
+      el.classList.toggle("sel-r", inside && (d === r.to || col === 6));
+      el.tabIndex = d === state.focus ? 0 : -1;
+    }
+  }
+
+  function choose(d) {
+    state.focus = d;
+    if (!state.pick || state.pick.end) state.pick = { start: d, end: null, hover: null };
+    else state.pick.end = d;
+    paintPick();
+    renderPanel();
+  }
+
+  function cancelPick() {
+    state.pick = null;
+    paintPick();
+    renderPanel();
+  }
+
+  function addPick() {
+    const r = pickBounds();
+    if (!r) return;
+    state.draft = normalise([...state.draft, r]);
+    state.pick = null;
+    render();
+    const added = state.draft.find((x) => x.from <= r.from && x.to >= r.to);
+    if (added) flashEntry(key(added));
+  }
+
+  function moveFocus(d) {
+    if (d < state.today) d = state.today;
+    state.focus = d;
+    const lastShown = monthEnd(addMonths(state.view, MONTHS_SHOWN - 1));
+    if (d < state.view) {
+      state.view = monthStart(d);
+      renderMonths();
+    } else if (d > lastShown) {
+      state.view = addMonths(monthStart(d), -(MONTHS_SHOWN - 1));
+      renderMonths();
+    }
+    if (state.pick && !state.pick.end) state.pick.hover = d;
+    paintPick();
+    const btn = document.querySelector(`.day[data-date="${d}"]`);
+    if (btn) btn.focus();
+  }
+
+  // ---- Selection panel ----
+  function el(tag, props = {}, text) {
+    const node = document.createElement(tag);
+    Object.assign(node, props);
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function bookedWarning(r) {
+    const hits = [];
+    if (state.bookedUntil.parking && r.from <= state.bookedUntil.parking)
+      hits.push(`parking up to ${dayLabel(state.bookedUntil.parking, false)}`);
+    if (state.bookedUntil.desk && r.from <= state.bookedUntil.desk)
+      hits.push(`your desk up to ${dayLabel(state.bookedUntil.desk, false)}`);
+    if (!hits.length) return null;
+    return `The script has probably already booked ${hits.join(" and ")}. ` +
+      "Adding leave won't cancel those bookings, so cancel any you don't need in Flexopus.";
+  }
+
+  function renderPanel() {
+    const panel = $("selection");
+    panel.textContent = "";
+    const p = state.pick;
+
+    if (!p) {
+      panel.appendChild(el("p", { className: "hint" },
+        "Click the first day of your leave, then the last day."));
+      return;
+    }
+
+    const r = pickBounds();
+    const text = el("div");
+    const actions = el("div", { className: "actions" });
+    const cancel = el("button", { type: "button", className: "btn quiet" }, "Cancel");
+    cancel.addEventListener("click", cancelPick);
+
+    if (!p.end) {
+      text.appendChild(el("p", { className: "selection-title" }, `From ${dayLabel(p.start)}`));
+      text.appendChild(el("p", { className: "selection-meta" },
+        "Now click the last day of your leave, or add just this day."));
+      const addOne = el("button", { type: "button", className: "btn primary" }, "Add this day");
+      addOne.addEventListener("click", () => { state.pick.end = state.pick.start; addPick(); });
+      actions.append(cancel, addOne);
+    } else {
+      const days = workingDays(r);
+      text.appendChild(el("p", { className: "selection-title" }, rangeLabel(r)));
+      text.appendChild(el("p", { className: "selection-meta" },
+        days === 0 ? "Weekend only. The script never books weekends anyway." : plural(days, "working day")));
+      const add = el("button", { type: "button", className: "btn primary" }, "Add to leave");
+      add.addEventListener("click", addPick);
+      actions.append(cancel, add);
+    }
+    panel.append(text, actions);
+
+    const warning = bookedWarning(r);
+    if (warning) panel.appendChild(el("p", { className: "warning" }, warning));
+  }
+
+  // ---- Leave list ----
+  function entryItem(r, savedKeys, past) {
+    const li = el("li", { className: "entry" });
+    li.dataset.key = key(r);
+
+    const date = el("button", { type: "button", className: "entry-date" }, rangeLabel(r));
+    date.title = "Show on the calendar";
+    date.addEventListener("click", () => {
+      state.view = monthStart(r.from < state.today ? state.today : r.from);
+      renderMonths();
+      $("months").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+    li.appendChild(date);
+
+    const days = workingDays(r);
+    li.appendChild(el("span", { className: "entry-meta" }, plural(days, "working day")));
+    if (!savedKeys.has(key(r))) li.appendChild(el("span", { className: "tag" }, "Not saved"));
+
+    const remove = el("button", { type: "button", className: "link danger" }, "Remove");
+    remove.setAttribute("aria-label", `Remove ${rangeLabel(r)}`);
+    remove.addEventListener("click", () => {
+      state.draft = state.draft.filter((x) => key(x) !== key(r));
+      render();
+    });
+    li.appendChild(remove);
+    return li;
+  }
+
+  function renderList() {
+    const savedKeys = new Set(state.saved.map(key));
+    const upcoming = state.draft.filter((r) => r.to >= state.today);
+    const past = state.draft.filter((r) => r.to < state.today);
+
+    const list = $("upcoming");
+    list.textContent = "";
+    for (const r of upcoming) list.appendChild(entryItem(r, savedKeys, false));
+    $("emptyNote").hidden = upcoming.length > 0;
+
+    const pastList = $("past");
+    pastList.textContent = "";
+    for (const r of past.slice().reverse()) pastList.appendChild(entryItem(r, savedKeys, true));
+    $("pastWrap").hidden = past.length === 0;
+    $("pastSummary").textContent = `Past leave (${past.length})`;
+
+    $("configPath").textContent = state.configPath ? `Saving to ${state.configPath}` : "";
+  }
+
+  function flashEntry(k) {
+    const li = document.querySelector(`.entry[data-key="${k}"]`);
+    if (!li) return;
+    li.classList.remove("fresh");
+    void li.offsetWidth;
+    li.classList.add("fresh");
+  }
+
+  // ---- Save bar ----
+  function renderSaveBar() {
+    const c = changes();
+    const dirty = c.added + c.removed > 0;
+    const err = state.saveError;
+    $("savebar").classList.toggle("open", (dirty || !!err) && !state.closed);
+
+    const status = $("saveStatus");
+    status.className = err ? "error" : "";
+    status.setAttribute("role", err ? "alert" : "status");
+    if (err) {
+      status.textContent = err.conflict
+        ? "config.json was changed outside this page. Reload to see the latest leave, then make your changes again."
+        : `Couldn't save: ${err.message} Your config wasn't changed.`;
+    } else {
+      const parts = [];
+      if (c.added) parts.push(`${plural(c.added, "period")} added`);
+      if (c.removed) parts.push(`${c.removed} removed`);
+      status.textContent = `Unsaved changes: ${parts.join(", ")}.`;
+    }
+
+    $("reloadBtn").hidden = !(err && err.conflict);
+    $("saveBtn").hidden = !!(err && err.conflict);
+    $("saveBtn").disabled = state.saving || !dirty;
+    $("saveBtn").textContent = state.saving ? "Saving…" : "Save changes";
+    $("discardBtn").disabled = state.saving;
+  }
+
+  let toastTimer;
+  function toast(message) {
+    const t = $("toast");
+    t.textContent = message;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 3500);
+  }
+
+  function render() {
+    renderMonths();
+    renderPanel();
+    renderList();
+    renderSaveBar();
+  }
+
+  // ---- Server ----
+  function asList(value) {
+    // Windows PowerShell can send a one-item list as a bare object
+    if (Array.isArray(value)) return value;
+    return value ? [value] : [];
+  }
+
+  function applyState(data) {
+    state.saved = normalise(asList(data.leave));
+    state.draft = state.saved.map((r) => ({ ...r }));
+    state.version = data.version || "";
+    state.today = data.today;
+    state.bookedUntil = data.bookedUntil || {};
+    state.configPath = data.configPath || "";
+    if (!state.view) state.view = monthStart(state.today);
+    if (!state.focus || state.focus < state.today) state.focus = state.today;
+    state.saveError = null;
+  }
+
+  async function request(method, path, body) {
+    let res;
+    try {
+      res = await fetch(path, {
+        method,
+        cache: "no-store",
+        headers: body ? { "Content-Type": "application/json" } : {},
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch {
+      throw Object.assign(new Error("The leave page server isn't running. Start LeaveUI.ps1 again."), { offline: true });
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw Object.assign(new Error(data.error || `The server returned ${res.status}.`), { status: res.status });
+    return data;
+  }
+
+  async function load() {
+    try {
+      applyState(await request("GET", "/api/leave"));
+      render();
+    } catch (err) {
+      showNotice("Couldn't load your leave", err.message);
+    }
+  }
+
+  async function save() {
+    if (state.saving) return;
+    state.saving = true;
+    state.saveError = null;
+    renderSaveBar();
+    try {
+      const data = await request("PUT", "/api/leave", { leave: state.draft, version: state.version });
+      state.pick = null;
+      applyState(data);
+      render();
+      toast("Leave saved. The next run will skip these days.");
+    } catch (err) {
+      state.saveError = { message: err.message, conflict: err.status === 409 };
+    } finally {
+      state.saving = false;
+      renderSaveBar();
+    }
+  }
+
+  function discard() {
+    state.draft = state.saved.map((r) => ({ ...r }));
+    state.pick = null;
+    state.saveError = null;
+    render();
+  }
+
+  async function closeServer() {
+    state.closed = true;
+    try { await request("POST", "/api/close"); } catch { /* already stopped */ }
+    showNotice("Leave page closed", "You can close this tab. To change your leave again, run LeaveUI.ps1.");
+  }
+
+  function showNotice(title, text) {
+    $("app").hidden = true;
+    $("savebar").classList.remove("open");
+    $("notice").hidden = false;
+    $("noticeTitle").textContent = title;
+    $("noticeText").textContent = text;
+  }
+
+  // ---- Events ----
+  const months = $("months");
+  months.addEventListener("click", (e) => {
+    const day = e.target.closest(".day[data-date]");
+    if (day && !day.disabled) choose(day.dataset.date);
+  });
+  const hoverDay = (e) => {
+    const day = e.target.closest(".day[data-date]");
+    if (!day || day.disabled || !state.pick || state.pick.end) return;
+    state.pick.hover = day.dataset.date;
+    paintPick();
+  };
+  months.addEventListener("mouseover", hoverDay);
+  months.addEventListener("focusin", hoverDay);
+  months.addEventListener("keydown", (e) => {
+    const day = e.target.closest(".day[data-date]");
+    const steps = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+    if (day && e.key in steps) {
+      e.preventDefault();
+      moveFocus(addDays(day.dataset.date, steps[e.key]));
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && state.pick && !$("closeDialog").open) cancelPick();
+  });
+
+  $("prevBtn").addEventListener("click", () => { state.view = addMonths(state.view, -1); renderMonths(); });
+  $("nextBtn").addEventListener("click", () => { state.view = addMonths(state.view, 1); renderMonths(); });
+  $("todayBtn").addEventListener("click", () => { state.view = monthStart(state.today); renderMonths(); });
+
+  $("removePastBtn").addEventListener("click", () => {
+    state.draft = state.draft.filter((r) => r.to >= state.today);
+    render();
+  });
+
+  $("saveBtn").addEventListener("click", save);
+  $("discardBtn").addEventListener("click", discard);
+  $("reloadBtn").addEventListener("click", () => { state.view = ""; load(); });
+
+  $("closeBtn").addEventListener("click", () => {
+    if (isDirty()) $("closeDialog").showModal();
+    else closeServer();
+  });
+  $("keepEditingBtn").addEventListener("click", () => $("closeDialog").close());
+  $("closeAnywayBtn").addEventListener("click", () => { $("closeDialog").close(); closeServer(); });
+
+  window.addEventListener("beforeunload", (e) => {
+    if (isDirty() && !state.closed) e.preventDefault();
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>
